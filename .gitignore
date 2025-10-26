@@ -1,0 +1,35 @@
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Logs and checkpoints
+*.log
+*.pt
+*.pth
+*.ckpt
+checkpoint_*.pt
+
+# Plots, predictions, and outputs
+plots/
+predictions_*.csv
+
+# Data files
+*.csv
+*.xlsx
+data/
+datasets/
+
+# IDE files
+.vscode/
+.idea/
+.DS_Store
+
+# OS files
+Thumbs.db
