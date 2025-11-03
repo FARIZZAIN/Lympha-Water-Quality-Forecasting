@@ -1,52 +1,46 @@
-# scripts/eval_and_plot.py
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+import os
+import argparse
+import pandas as pd
+import numpy as np
 
 from src.config import Config
 from src.eval import evaluate_checkpoint, plot_series
-import numpy as np
-import csv
+
 
 def main():
-    cfg = Config()
-    # Pick checkpoint: "checkpoint_rl.pt" (RL) or "checkpoint_stae.pt" (no-RL)
-    ckpt_path = "checkpoint_rl.pt"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ckpt", type=str, default="checkpoint_rl.pt", help="Path to checkpoint (RL or STAE).")
+    parser.add_argument("--plots_dir", type=str, default="plots", help="Directory to save test plots.")
+    parser.add_argument("--preds_csv", type=str, default="predictions_test.csv", help="CSV path for test predictions.")
+    parser.add_argument("--last", type=int, default=200, help="How many tail samples to plot per series.")
+    args = parser.parse_args()
 
-    out = evaluate_checkpoint(ckpt_path, cfg, use_rl=True)
-    cols = out["cols"]
-    Yhat, Ytrue = out["Yhat"], out["Ytrue"]
+    cfg = Config()  # uses your current project config
 
-    print("Per-node MAE:")
-    for c, m in zip(cols, out["mae_per"]):
-        print(f"  {c:>12s}: {m:.4f}")
-    print("Per-node RMSE:")
-    for c, r in zip(cols, out["rmse_per"]):
-        print(f"  {c:>12s}: {r:.4f}")
-    print(f"Overall  MAE: {out['mae']:.4f}")
-    print(f"Overall RMSE: {out['rmse']:.4f}")
+    # Run evaluation (prints concise overall + per-variable metrics)
+    out = evaluate_checkpoint(args.ckpt, cfg, use_rl=True)
 
-    # Save CSV with predictions & truth (test set order)
-    test_csv = Path("predictions_test.csv")
-    with test_csv.open("w", newline="") as f:
-        w = csv.writer(f)
-        header = []
-        for c in cols:
-            header += [f"{c}_true", f"{c}_pred"]
-        w.writerow(header)
-        for i in range(Yhat.shape[0]):
-            row = []
-            for j in range(len(cols)):
-                row += [Ytrue[i, j], Yhat[i, j]]
-            w.writerow(row)
-    print(f"Saved predictions to {test_csv.resolve()}")
+    cols: list[str] = out["cols"]
+    Yhat: np.ndarray = out["Yhat"]   # (S, N)
+    Ytrue: np.ndarray = out["Ytrue"] # (S, N)
 
-    # Plots per node (last 200 test points)
-    plots_dir = Path("plots")
-    plots_dir.mkdir(exist_ok=True)
-    for j, c in enumerate(cols):
-        plot_series(Ytrue[:, j], Yhat[:, j], f"{c} — test (last 200)", str(plots_dir / f"{c}_test.png"))
-    print(f"Saved plots to {plots_dir.resolve()}")
+    # Save predictions CSV (both true & pred, side-by-side)
+    os.makedirs(os.path.dirname(args.preds_csv) or ".", exist_ok=True)
+    data = {}
+    for i, c in enumerate(cols):
+        data[f"{c}_true"] = Ytrue[:, i]
+        data[f"{c}_pred"] = Yhat[:, i]
+    pd.DataFrame(data).to_csv(args.preds_csv, index=False)
+    print(f"Saved predictions to {os.path.abspath(args.preds_csv)}")
+
+    # Save per-variable plots
+    os.makedirs(args.plots_dir, exist_ok=True)
+    for i, c in enumerate(cols):
+        savepath = os.path.join(args.plots_dir, f"{c}_test.png")
+        plot_series(Ytrue[:, i], Yhat[:, i], title=f"{c} — test predictions", savepath=savepath, last=args.last)
+
+    print(f"Saved plots to {os.path.abspath(args.plots_dir)}")
+
 
 if __name__ == "__main__":
     main()
